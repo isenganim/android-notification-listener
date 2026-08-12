@@ -5,6 +5,7 @@ import android.content.ComponentName
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import com.saquone.notificationlistener.container
+import com.saquone.notificationlistener.data.parseAmount
 import com.saquone.notificationlistener.util.ListenerProbe
 import com.saquone.notificationlistener.work.WorkScheduler
 import kotlinx.coroutines.CoroutineScope
@@ -54,6 +55,7 @@ class NotificationListener : NotificationListenerService() {
 
   private suspend fun ingest(sbn: StatusBarNotification) {
     if (sbn.packageName !in container.settings.watchedNow()) return
+    val gateway = container.catalog.current().firstOrNull { sbn.packageName in it.packages }
     val extras = sbn.notification.extras
     val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty().trim()
     val text =
@@ -62,7 +64,9 @@ class NotificationListener : NotificationListenerService() {
         .trim()
     if (title.isBlank() && text.isBlank()) return
 
-    container.outbox.enqueue(sbn.packageName, title, text, sbn.postTime)
+    // Nominal dibaca lokal hanya untuk ditampilkan di log; server tetap menghitung ulang sendiri.
+    val amount = gateway?.let { parseAmount(it.patterns, "$title $text") }
+    container.outbox.enqueue(sbn.packageName, title, text, sbn.postTime, amount)
     WorkScheduler.flushNow(applicationContext)
   }
 }

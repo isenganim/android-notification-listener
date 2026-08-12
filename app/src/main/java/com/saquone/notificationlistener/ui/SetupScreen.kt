@@ -96,7 +96,12 @@ fun SetupScreen(state: UiState, viewModel: ListenerViewModel, onDone: () -> Unit
         onValueChange = { url = it },
         label = { Text("URL endpoint") },
         placeholder = { Text("https://contoh.com/events") },
-        supportingText = { Text("Harus bisa menerima POST JSON.") },
+        supportingText = {
+          Text(
+            if (url.startsWith("http://")) "HTTP tanpa enkripsi — aman untuk jaringan lokal, pakai HTTPS di luar itu."
+            else "Harus bisa menerima POST JSON."
+          )
+        },
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next),
         modifier = Modifier.fillMaxWidth(),

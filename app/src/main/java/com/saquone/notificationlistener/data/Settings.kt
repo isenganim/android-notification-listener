@@ -2,6 +2,7 @@ package com.saquone.notificationlistener.data
 
 import android.content.Context
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -41,9 +42,23 @@ class Settings(private val context: Context) {
     }
   }
 
+  /** Katalog gateway hasil sinkron terakhir, apa adanya. Kosong = belum pernah sinkron. */
+  suspend fun catalogJsonNow(): String = context.dataStore.data.first()[CATALOG].orEmpty()
+
+  val catalogSyncedAt: Flow<Long> = context.dataStore.data.map { it[CATALOG_AT] ?: 0L }
+
+  suspend fun saveCatalogJson(raw: String) {
+    context.dataStore.edit {
+      it[CATALOG] = raw
+      it[CATALOG_AT] = System.currentTimeMillis()
+    }
+  }
+
   private companion object {
     val URL = stringPreferencesKey("endpoint_url")
     val SECRET = stringPreferencesKey("endpoint_secret")
     val WATCHED = stringSetPreferencesKey("watched_packages")
+    val CATALOG = stringPreferencesKey("catalog_json")
+    val CATALOG_AT = longPreferencesKey("catalog_synced_at")
   }
 }

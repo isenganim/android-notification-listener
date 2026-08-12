@@ -23,8 +23,8 @@ class Outbox(private val dao: EventDao, private val settings: Settings) {
   private val http = OkHttpClient()
   private val json = Json { encodeDefaults = true }
 
-  suspend fun enqueue(pkg: String, title: String, text: String, postedAt: Long) {
-    dao.insert(Event(pkg = pkg, title = title, text = text, postedAt = postedAt))
+  suspend fun enqueue(pkg: String, title: String, text: String, postedAt: Long, amount: Long?) {
+    dao.insert(Event(pkg = pkg, title = title, text = text, postedAt = postedAt, amount = amount))
   }
 
   suspend fun flush() {

@@ -2,6 +2,7 @@ package com.saquone.notificationlistener
 
 import android.app.Application
 import android.content.Context
+import com.saquone.notificationlistener.data.Catalog
 import com.saquone.notificationlistener.data.Db
 import com.saquone.notificationlistener.data.Outbox
 import com.saquone.notificationlistener.data.Settings
@@ -11,6 +12,7 @@ class Container(context: Context) {
   val settings = Settings(context)
   val events = db.events()
   val outbox = Outbox(events, settings)
+  val catalog = Catalog(context, settings)
 }
 
 class ListenerApp : Application() {

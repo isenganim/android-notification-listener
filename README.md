@@ -12,8 +12,27 @@ tentukan, dan tidak ke mana-mana lagi.
 
 1. Pasang APK, buka, isi **URL endpoint** (+ secret kalau mau request ditandatangani)
 2. Beri izin **akses notifikasi** saat diminta
-3. Nyalakan switch untuk aplikasi yang mau dibaca
-4. Tekan **Tes sekarang** untuk membuktikan listener benar-benar hidup
+3. Buka tab **Aplikasi**, nyalakan switch untuk aplikasi pembayaran yang mau dibaca
+4. Tab **Status** → **Tes sekarang** untuk membuktikan listener benar-benar hidup
+
+Tiga tab: **Status** (kesehatan + endpoint), **Aplikasi** (pilih yang dibaca), **Log**.
+
+### Aplikasi mana yang muncul
+
+Hanya aplikasi pembayaran yang didukung — DANA Bisnis, GoPay Merchant, Grab Merchant,
+BRI Merchant, ShopeePay Merchant, OVO, dan lainnya. Bukan seluruh isi HP.
+
+Daftarnya **tidak ditulis di aplikasi ini**. Sumbernya `GET /gateways` di
+[qris-server](https://github.com/Saquone/qris), diambil saat online dan disimpan untuk
+dipakai offline. Menambah dukungan gateway baru cukup di server:
+
+```bash
+qris-server -catalog gateways-saya.json
+```
+
+lalu tekan ikon refresh di tab Aplikasi — **tanpa membangun ulang APK**. Salinan bawaan
+ada di `app/src/main/assets/gateways.json` supaya aplikasi tetap berguna sebelum pernah
+tersambung.
 
 ## Yang dikirim
 

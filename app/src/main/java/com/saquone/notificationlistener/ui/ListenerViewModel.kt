@@ -1,12 +1,12 @@
 package com.saquone.notificationlistener.ui
 
 import android.app.Application
-import android.content.pm.ApplicationInfo
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.saquone.notificationlistener.container
 import com.saquone.notificationlistener.data.Endpoint
 import com.saquone.notificationlistener.data.Event
+import com.saquone.notificationlistener.data.Gateway
 import com.saquone.notificationlistener.util.DeviceHealthChecks
 import com.saquone.notificationlistener.util.ListenerProbe
 import com.saquone.notificationlistener.util.OemGuidance
@@ -19,7 +19,14 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-data class InstalledApp(val packageName: String, val label: String, val watched: Boolean)
+/** Satu aplikasi gateway: sudah terpasang atau belum, dan sedang dibaca atau tidak. */
+data class GatewayApp(
+  val packageName: String,
+  val label: String,
+  val gatewayLabel: String,
+  val installed: Boolean,
+  val watched: Boolean,
+)
 
 data class UiState(
   val endpoint: Endpoint = Endpoint("", ""),
@@ -28,14 +35,19 @@ data class UiState(
   val batteryExempt: Boolean = false,
   val probe: ListenerProbe.Result? = null,
   val probeRunning: Boolean = false,
-  val apps: List<InstalledApp> = emptyList(),
+  val apps: List<GatewayApp> = emptyList(),
   val appsLoading: Boolean = true,
+  val catalogSize: Int = 0,
+  val catalogSyncing: Boolean = false,
   val events: List<Event> = emptyList(),
   val pendingCount: Int = 0,
   val message: String? = null,
 ) {
   val watchedCount: Int
     get() = apps.count { it.watched }
+
+  val installedCount: Int
+    get() = apps.count { it.installed }
 }
 
 class ListenerViewModel(app: Application) : AndroidViewModel(app) {
@@ -53,6 +65,7 @@ class ListenerViewModel(app: Application) : AndroidViewModel(app) {
     viewModelScope.launch { container.events.recent().collect { l -> _state.update { it.copy(events = l) } } }
     viewModelScope.launch { container.events.pendingCount().collect { c -> _state.update { it.copy(pendingCount = c) } } }
     viewModelScope.launch { container.settings.watched.collect { refreshApps(it) } }
+    viewModelScope.launch { syncCatalog(silent = true) }
     WorkScheduler.schedulePeriodic(app)
   }
 
@@ -67,7 +80,10 @@ class ListenerViewModel(app: Application) : AndroidViewModel(app) {
   }
 
   fun saveEndpoint(url: String, secret: String) {
-    viewModelScope.launch { container.settings.saveEndpoint(url, secret) }
+    viewModelScope.launch {
+      container.settings.saveEndpoint(url, secret)
+      syncCatalog(silent = true)
+    }
   }
 
   fun sendTest(url: String, secret: String) {
@@ -82,6 +98,27 @@ class ListenerViewModel(app: Application) : AndroidViewModel(app) {
           onFailure = { "Gagal terhubung: ${it.message ?: "periksa URL dan koneksi"}" },
         )
       _state.update { it.copy(message = message) }
+    }
+  }
+
+  /** Ambil katalog terbaru dari server; gagal = tetap pakai yang tersimpan. */
+  fun syncCatalog(silent: Boolean = false) {
+    viewModelScope.launch {
+      if (!silent) _state.update { it.copy(catalogSyncing = true) }
+      val result = withContext(Dispatchers.IO) { container.catalog.sync() }
+      _state.update { it.copy(catalogSyncing = false) }
+      refreshApps(container.settings.watchedNow())
+      if (!silent) {
+        _state.update {
+          it.copy(
+            message =
+              result.fold(
+                onSuccess = { n -> "Katalog diperbarui — $n gateway." },
+                onFailure = { e -> "Gagal ambil katalog: ${e.message}. Memakai salinan tersimpan." },
+              )
+          )
+        }
+      }
     }
   }
 
@@ -116,19 +153,33 @@ class ListenerViewModel(app: Application) : AndroidViewModel(app) {
 
   fun openOemGuide() = DeviceHealthChecks.openDontKillMyAppGuide(getApplication(), oemTip)
 
-  /** Hanya aplikasi berikon peluncur — cukup untuk memilih bank/e-wallet tanpa QUERY_ALL_PACKAGES. */
+  /**
+   * Yang ditampilkan HANYA aplikasi yang ada di katalog — bukan seluruh isi HP. Daftarnya datang
+   * dari qris-server, jadi menambah dukungan gateway baru tidak butuh rilis ulang APK.
+   */
   private suspend fun refreshApps(watched: Set<String>) {
     val pm = getApplication<Application>().packageManager
+    val gateways: List<Gateway> = container.catalog.current()
     val apps =
       withContext(Dispatchers.IO) {
-        pm.getInstalledApplications(0)
-          .asSequence()
-          .filter { it.flags and ApplicationInfo.FLAG_SYSTEM == 0 || it.packageName in watched }
-          .filter { pm.getLaunchIntentForPackage(it.packageName) != null || it.packageName in watched }
-          .map { InstalledApp(it.packageName, pm.getApplicationLabel(it).toString(), it.packageName in watched) }
-          .sortedWith(compareByDescending<InstalledApp> { it.watched }.thenBy { it.label.lowercase() })
-          .toList()
+        gateways
+          .flatMap { g -> g.packages.map { pkg -> g to pkg } }
+          .map { (g, pkg) ->
+            val label = runCatching { pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString() }.getOrNull()
+            GatewayApp(
+              packageName = pkg,
+              label = label ?: g.label,
+              gatewayLabel = g.label,
+              installed = label != null,
+              watched = pkg in watched,
+            )
+          }
+          .sortedWith(
+            compareByDescending<GatewayApp> { it.watched }
+              .thenByDescending { it.installed }
+              .thenBy { it.gatewayLabel.lowercase() }
+          )
       }
-    _state.update { it.copy(apps = apps, appsLoading = false) }
+    _state.update { it.copy(apps = apps, appsLoading = false, catalogSize = gateways.size) }
   }
 }

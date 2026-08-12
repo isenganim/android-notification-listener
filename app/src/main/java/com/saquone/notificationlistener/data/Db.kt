@@ -11,6 +11,8 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -28,6 +30,8 @@ data class Event(
   val status: String = PENDING,
   val attempts: Int = 0,
   val lastError: String? = null,
+  /** Nominal hasil pola katalog — hanya untuk ditampilkan; server menghitung ulang sendiri. */
+  val amount: Long? = null,
 ) {
   companion object {
     const val PENDING = "pending"
@@ -58,11 +62,21 @@ interface EventDao {
   @Query("DELETE FROM event") suspend fun clear()
 }
 
-@Database(entities = [Event::class], version = 1, exportSchema = false)
+@Database(entities = [Event::class], version = 2, exportSchema = false)
 abstract class Db : RoomDatabase() {
   abstract fun events(): EventDao
 
   companion object {
-    fun open(context: Context): Db = Room.databaseBuilder(context, Db::class.java, "listener.db").build()
+    // Migrasi, bukan destructive: antrean berisi notifikasi yang BELUM terkirim — menghapusnya
+    // saat update berarti kehilangan pembayaran.
+    private val MIGRATION_1_2 =
+      object : Migration(1, 2) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+          db.execSQL("ALTER TABLE event ADD COLUMN amount INTEGER")
+        }
+      }
+
+    fun open(context: Context): Db =
+      Room.databaseBuilder(context, Db::class.java, "listener.db").addMigrations(MIGRATION_1_2).build()
   }
 }
