@@ -56,9 +56,9 @@ tetap di antrean dan dicoba lagi — **tidak ada yang hilang saat offline**. Not
 selalu disimpan ke Room dulu, baru dikirim; kalau prosesnya dimatikan sistem di tengah
 jalan, antreannya selamat.
 
-Tidak ada parsing di aplikasi. Teks mentah dikirim apa adanya — server yang memutuskan
-artinya. Pola teks notifikasi bank berubah sewaktu-waktu, dan mengubah aturan di server
-jauh lebih murah daripada merilis ulang APK.
+Teks mentah dikirim apa adanya — **server yang berwenang** memutuskan artinya. Aplikasi juga
+membaca nominalnya sendiri memakai pola dari katalog, tapi itu hanya untuk ditampilkan di tab
+Log; hasilnya tidak ikut dikirim.
 
 ## Menerima tanpa menulis kode
 
@@ -130,9 +130,12 @@ Izin diberikan ≠ layanan dijalankan. Di MIUI/HyperOS dengan "Mulai otomatis" m
 menolak mem-bind listener padahal izinnya ada — aplikasi tampak sehat sementara tidak ada
 satu pun notifikasi terbaca.
 
-Karena itu ada tombol **Tes sekarang**: aplikasi mem-post notifikasi ke dirinya sendiri
-lalu memeriksa apakah listener-nya melihatnya. Kalau tidak sampai, layar utama menampilkan
-langkah spesifik untuk merek HP-mu plus pintasan ke layar Autostart-nya.
+Karena itu ada tombol **Tes sekarang** di tab Status: aplikasi mem-post notifikasi ke dirinya
+sendiri lalu memeriksa apakah listener-nya melihatnya. Kalau tidak sampai, muncul langkah
+spesifik untuk merek HP-mu plus pintasan ke layar Autostart-nya.
+
+Diuji di Xiaomi (HyperOS): izin sudah diberikan dan aplikasi tampak aktif, tapi sistem menolak
+mem-bind listener-nya — persis kasus yang tombol ini cari.
 
 ## Build
 
@@ -166,7 +169,9 @@ disebut di sini supaya daftarnya jujur. Verifikasi sendiri:
 aapt2 dump permissions app-debug.apk
 ```
 
-Tidak ada `QUERY_ALL_PACKAGES`: daftar aplikasi diambil dari yang punya ikon peluncur saja.
+Tidak ada `QUERY_ALL_PACKAGES`. Sebagai gantinya `<queries>` dengan filter intent LAUNCHER —
+sejak Android 11 aplikasi tidak bisa melihat paket lain tanpa itu, dan tanpanya semua gateway
+tampak "belum terpasang". Yang terlihat hanya aplikasi berikon peluncur, bukan seluruh isi HP.
 Backup dimatikan supaya secret endpoint tidak ikut tersalin ke cloud lalu dipulihkan ke
 perangkat lain.
 
