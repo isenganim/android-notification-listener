@@ -41,10 +41,35 @@ Tidak ada parsing di aplikasi. Teks mentah dikirim apa adanya — server yang me
 artinya. Pola teks notifikasi bank berubah sewaktu-waktu, dan mengubah aturan di server
 jauh lebih murah daripada merilis ulang APK.
 
-## Menerima di Go
+## Menerima tanpa menulis kode
 
-Verifikasi tanda tangan dan ekstraksi nominal sudah ada di
-[github.com/saquone/qris](https://github.com/Saquone/qris) (MIT):
+[github.com/saquone/qris](https://github.com/Saquone/qris) (MIT) punya server siap pakai
+yang menerima payload di atas apa adanya:
+
+```bash
+go install github.com/saquone/qris/cmd/qris-server@latest
+
+cat > patterns.txt <<'EOF'
+(?i)Rp\s?([0-9.,]+)\s*diterima
+(?i)menerima Rp ?([0-9.,]+)
+EOF
+
+qris-server -secret whsec_rahasia -patterns patterns.txt
+```
+
+Isi URL `http://<ip-servermu>:8080/notification` dan secret yang sama di aplikasi, lalu tiap
+notifikasi dijawab:
+
+```json
+{"amount":50137,"matched":true,"package_name":"id.dana","posted_at":1765432100000}
+```
+
+Pola dicoba berurutan, jadi baris lama tetap jadi fallback saat format teks bank berubah.
+
+## Menerima di kodemu sendiri
+
+Kalau mau logika sendiri, verifikasi tanda tangan dan ekstraksi nominal tersedia sebagai
+library:
 
 ```go
 import (
