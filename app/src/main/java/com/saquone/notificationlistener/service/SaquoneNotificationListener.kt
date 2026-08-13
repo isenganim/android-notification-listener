@@ -17,7 +17,7 @@ import kotlinx.coroutines.launch
  * Menyimpan notifikasi ke Room SEBELUM apa pun menyentuh jaringan. Offline atau proses mati tepat
  * setelahnya = tidak ada yang hilang. Tidak ada parsing di sini; teks mentah diteruskan apa adanya.
  */
-class NotificationListener : NotificationListenerService() {
+class SaquoneNotificationListener : NotificationListenerService() {
 
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -42,7 +42,7 @@ class NotificationListener : NotificationListenerService() {
   }
 
   override fun onListenerDisconnected() {
-    requestRebind(ComponentName(this, NotificationListener::class.java))
+    requestRebind(ComponentName(this, SaquoneNotificationListener::class.java))
   }
 
   /** Notifikasi milik sendiri = probe [ListenerProbe]. Ditandai, dibatalkan, tidak diteruskan. */
