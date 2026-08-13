@@ -35,7 +35,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:windowSoftInputMode="adjustResize"
-        android:theme="@style/Theme.AndroidNotificationListener">
+        android:theme="@style/Theme.SaquoneNotificationListener">
         <activity
             android:name=".MainActivity"
             android:exported="true">

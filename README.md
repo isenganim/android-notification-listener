@@ -1,4 +1,4 @@
-# qris-listener
+# Saquone Notification Listener
 
 Listener notifikasi Android untuk **QRIS**: baca notifikasi aplikasi merchant, teruskan ke
 server milikmu, dan biarkan nominalnya diverifikasi otomatis terhadap tagihan yang menunggu.
