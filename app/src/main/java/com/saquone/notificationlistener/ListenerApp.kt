@@ -12,7 +12,7 @@ class Container(context: Context) {
   val settings = Settings(context)
   val events = db.events()
   val outbox = Outbox(events, settings)
-  val catalog = Catalog(context, settings)
+  val catalog = Catalog(context, settings, db.gateways())
 }
 
 class ListenerApp : Application() {

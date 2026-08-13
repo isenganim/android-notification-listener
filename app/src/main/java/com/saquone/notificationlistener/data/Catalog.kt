@@ -7,42 +7,45 @@ import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.Request
 
-/**
- * Satu gateway pembayaran: aplikasi mana yang notifikasinya dibaca, dan pola apa yang dipakai
- * membaca nominalnya. Bentuknya sama persis dengan `catalog/gateways.json` di
- * github.com/saquone/qris.
- */
+/** Bentuknya sama persis dengan `catalog/gateways.json` di github.com/saquone/qris. */
 @Serializable
-data class Gateway(val key: String, val label: String, val packages: List<String>, val patterns: List<String>)
+data class GatewayDto(
+  val key: String,
+  val label: String,
+  val packages: List<String>,
+  val patterns: List<String>,
+  val verified: Boolean = false,
+)
 
 /**
  * Katalog gateway. Daftar aplikasi yang didukung TIDAK ditulis di aplikasi ini — sumbernya
- * `GET <origin>/gateways` di qris-server. Salinan bawaan di assets dipakai saat pertama jalan
- * atau ketika server tidak bisa dihubungi, jadi aplikasi tetap berguna offline.
+ * `GET <origin>/gateways` di qris-server, disimpan ke Room sebagai **cache** supaya tetap jalan
+ * offline. Salinan bawaan di assets dipakai sebelum pernah tersambung.
  */
-class Catalog(private val context: Context, private val settings: Settings) {
+class Catalog(private val context: Context, private val settings: Settings, private val dao: GatewayDao) {
 
   private val http = OkHttpClient()
   private val json = Json { ignoreUnknownKeys = true }
 
-  @Volatile private var cached: List<Gateway>? = null
+  /** Katalog tersimpan; kalau Room masih kosong, seed dari assets dulu. */
+  suspend fun current(): List<GatewayEntity> {
+    if (dao.count() == 0) save(bundled())
+    return dao.all()
+  }
 
-  fun bundled(): List<Gateway> =
+  fun flow() = dao.allFlow()
+
+  private fun bundled(): List<GatewayDto> =
     context.assets.open("gateways.json").use { json.decodeFromString(it.readBytes().decodeToString()) }
 
-  /** Katalog tersimpan, atau bawaan bila belum pernah sinkron. */
-  suspend fun current(): List<Gateway> {
-    cached?.let {
-      return it
-    }
-    val stored = settings.catalogJsonNow()
-    val list = if (stored.isBlank()) bundled() else runCatching { json.decodeFromString<List<Gateway>>(stored) }.getOrElse { bundled() }
-    cached = list
-    return list
+  private suspend fun save(list: List<GatewayDto>) {
+    val now = System.currentTimeMillis()
+    dao.upsert(list.map { GatewayEntity(it.key, it.label, it.packages, it.patterns, it.verified, now) })
+    dao.deleteMissing(list.map { it.key })
   }
 
   /**
-   * Ambil katalog terbaru dari server. Gagal = diam-diam pakai yang tersimpan; katalog basi jauh
+   * Ambil katalog terbaru dari server. Gagal = tetap pakai yang tersimpan; katalog basi jauh
    * lebih baik daripada aplikasi yang tidak bisa dipakai saat server mati.
    */
   suspend fun sync(): Result<Int> {
@@ -55,10 +58,9 @@ class Catalog(private val context: Context, private val settings: Settings) {
           if (!it.isSuccessful) throw IOException("HTTP ${it.code}")
           it.body.string()
         }
-      val list = json.decodeFromString<List<Gateway>>(body)
+      val list = json.decodeFromString<List<GatewayDto>>(body)
       if (list.isEmpty()) throw IOException("katalog kosong")
-      settings.saveCatalogJson(body)
-      cached = list
+      save(list)
       list.size
     }
   }

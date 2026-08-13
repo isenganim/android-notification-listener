@@ -1,9 +1,10 @@
-# Android Notification Listener
+# qris-listener
 
-Meneruskan notifikasi Android ke URL milikmu sendiri.
+Listener notifikasi Android untuk **QRIS**: baca notifikasi aplikasi merchant, teruskan ke
+server milikmu, dan biarkan nominalnya diverifikasi otomatis terhadap tagihan yang menunggu.
 
-Pilih aplikasi mana yang boleh dibaca, isi satu URL, selesai. Tiap notifikasi yang masuk
-dikirim sebagai JSON POST — ditandatangani HMAC-SHA256 kalau kamu mengisi secret.
+Pilih aplikasi merchant mana yang boleh dibaca, isi satu URL, selesai. Tiap notifikasi yang
+masuk dikirim sebagai JSON POST — ditandatangani HMAC-SHA256 kalau kamu mengisi secret.
 
 **Tanpa akun. Tanpa login. Tanpa server perantara.** Datanya pergi ke tempat yang kamu
 tentukan, dan tidak ke mana-mana lagi.
@@ -17,14 +18,21 @@ tentukan, dan tidak ke mana-mana lagi.
 
 Tiga tab: **Status** (kesehatan + endpoint), **Aplikasi** (pilih yang dibaca), **Log**.
 
+Tab **Log** menampilkan, per notifikasi: ikon aplikasi sumbernya, apakah **nominal terbaca**,
+dan apakah pembayarannya **terverifikasi** — yaitu nominalnya cocok persis dengan tagihan yang
+menunggu di server dan tagihan itu ditandai lunas. Dua hal yang berbeda dan sering tertukar.
+
 ### Aplikasi mana yang muncul
 
 Hanya aplikasi pembayaran yang didukung — DANA Bisnis, GoPay Merchant, Grab Merchant,
 BRI Merchant, ShopeePay Merchant, OVO, dan lainnya. Bukan seluruh isi HP.
 
 Daftarnya **tidak ditulis di aplikasi ini**. Sumbernya `GET /gateways` di
-[qris-server](https://github.com/Saquone/qris), diambil saat online dan disimpan untuk
-dipakai offline. Menambah dukungan gateway baru cukup di server:
+[qris-server](https://github.com/Saquone/qris), diambil saat online dan disimpan ke Room
+sebagai **cache** supaya tetap jalan offline — sumber kebenarannya tetap server.
+
+Gateway yang polanya belum dicocokkan dengan teks notifikasi asli ditandai
+"pola belum diverifikasi", bukan disamarkan seolah sudah pasti jalan. Menambah dukungan gateway baru cukup di server:
 
 ```bash
 qris-server -catalog gateways-saya.json
@@ -60,30 +68,37 @@ Teks mentah dikirim apa adanya — **server yang berwenang** memutuskan artinya.
 membaca nominalnya sendiri memakai pola dari katalog, tapi itu hanya untuk ditampilkan di tab
 Log; hasilnya tidak ikut dikirim.
 
-## Menerima tanpa menulis kode
+## Server pasangannya
 
-[github.com/saquone/qris](https://github.com/Saquone/qris) (MIT) punya server siap pakai
-yang menerima payload di atas apa adanya:
+[github.com/saquone/qris](https://github.com/Saquone/qris) (MIT) punya server siap pakai —
+**tanpa satu baris kode pun yang perlu kamu tulis**:
 
 ```bash
 go install github.com/saquone/qris/cmd/qris-server@latest
-
-cat > patterns.txt <<'EOF'
-(?i)Rp\s?([0-9.,]+)\s*diterima
-(?i)menerima Rp ?([0-9.,]+)
-EOF
-
-qris-server -secret whsec_rahasia -patterns patterns.txt
+qris-server -secret whsec_rahasia
 ```
 
-Isi URL `http://<ip-servermu>:8080/notification` dan secret yang sama di aplikasi, lalu tiap
-notifikasi dijawab:
+Isi URL `http://<ip-servermu>:8080/notification` + secret yang sama di aplikasi. Alur penuhnya:
+
+```bash
+# 1. unggah QRIS statis merchant (gambarnya disimpan di folder -qris-dir)
+curl -X POST localhost:8080/qris --data-binary @qris-toko.png
+
+# 2. buat tagihan — kode unik ditambahkan supaya nominalnya tidak pernah kembar
+curl -X POST localhost:8080/charges -d '{"amount":50000}'
+# → {"id":1,"amount":50684,"payload":"0002010102122665...","status":"pending"}
+
+# 3. pembeli bayar Rp50.684 → notifikasi masuk → aplikasi ini meneruskannya
+#    → server mencocokkan dan menandai tagihan lunas
+curl localhost:8080/charges/1
+# → {"status":"paid","paid_at":...}
+```
+
+Jawaban tiap notifikasi memuat status verifikasinya, dan itulah yang ditampilkan di tab Log:
 
 ```json
-{"amount":50137,"matched":true,"package_name":"id.dana","posted_at":1765432100000}
+{"amount":50684,"matched":true,"verified":true,"charge_id":1}
 ```
-
-Pola dicoba berurutan, jadi baris lama tetap jadi fallback saat format teks bank berubah.
 
 ## Menerima di kodemu sendiri
 

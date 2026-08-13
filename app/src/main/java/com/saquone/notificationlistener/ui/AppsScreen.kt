@@ -90,7 +90,13 @@ private fun AppRow(app: GatewayApp, viewModel: ListenerViewModel) {
           else MaterialTheme.colorScheme.onSurfaceVariant,
       )
     },
-    supportingContent = { Text(app.packageName, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+    supportingContent = {
+      Text(
+        if (app.verified) app.packageName else "${app.packageName} · pola belum diverifikasi",
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+      )
+    },
     trailingContent = {
       Switch(
         checked = app.watched,

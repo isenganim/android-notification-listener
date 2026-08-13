@@ -14,6 +14,15 @@ import okhttp3.RequestBody.Companion.toRequestBody
 @Serializable
 data class EventPayload(val package_name: String, val title: String, val text: String, val posted_at: Long)
 
+/** Jawaban `POST /notification` di qris-server. */
+@Serializable
+data class NotificationResult(
+  val matched: Boolean = false,
+  val amount: Long? = null,
+  val verified: Boolean = false,
+  val charge_id: Long? = null,
+)
+
 /**
  * Notifikasi selalu masuk Room dulu ([enqueue], tanpa jaringan); pengiriman ([flush]) operasi
  * terpisah yang dijalankan WorkManager. Offline atau proses mati di tengah = tidak ada yang hilang.
@@ -21,7 +30,10 @@ data class EventPayload(val package_name: String, val title: String, val text: S
 class Outbox(private val dao: EventDao, private val settings: Settings) {
 
   private val http = OkHttpClient()
-  private val json = Json { encodeDefaults = true }
+  private val json = Json {
+    encodeDefaults = true
+    ignoreUnknownKeys = true
+  }
 
   suspend fun enqueue(pkg: String, title: String, text: String, postedAt: Long, amount: Long?) {
     dao.insert(Event(pkg = pkg, title = title, text = text, postedAt = postedAt, amount = amount))
@@ -32,8 +44,14 @@ class Outbox(private val dao: EventDao, private val settings: Settings) {
     if (!endpoint.isConfigured) return
     for (e in dao.pending()) {
       try {
-        val code = post(endpoint, e)
-        if (code in 200..299) dao.markSent(e.id) else dao.markFailed(e.id, "HTTP $code")
+        val (code, body) = post(endpoint, e)
+        if (code !in 200..299) {
+          dao.markFailed(e.id, "HTTP $code")
+          continue
+        }
+        // Server yang berwenang memutuskan verifikasi; jawabannya disimpan untuk ditampilkan.
+        val res = runCatching { json.decodeFromString<NotificationResult>(body) }.getOrNull()
+        dao.markSent(e.id, res?.verified == true, res?.charge_id)
       } catch (ex: IOException) {
         dao.markFailed(e.id, ex.message ?: "gagal terhubung")
       }
@@ -42,7 +60,7 @@ class Outbox(private val dao: EventDao, private val settings: Settings) {
   }
 
   suspend fun sendTest(endpoint: Endpoint): Result<Int> = runCatching {
-    post(
+    postCode(
       endpoint,
       Event(
         pkg = "com.saquone.notificationlistener",
@@ -53,7 +71,9 @@ class Outbox(private val dao: EventDao, private val settings: Settings) {
     )
   }
 
-  private fun post(endpoint: Endpoint, e: Event): Int {
+  private fun postCode(endpoint: Endpoint, e: Event): Int = post(endpoint, e).first
+
+  private fun post(endpoint: Endpoint, e: Event): Pair<Int, String> {
     val body =
       json.encodeToString(EventPayload(package_name = e.pkg, title = e.title, text = e.text, posted_at = e.postedAt))
     val request =
@@ -62,7 +82,7 @@ class Outbox(private val dao: EventDao, private val settings: Settings) {
         .post(body.toRequestBody(JSON_MEDIA_TYPE))
         .apply { if (endpoint.secret.isNotBlank()) header(SIGNATURE_HEADER, sign(endpoint.secret, body)) }
         .build()
-    return http.newCall(request).execute().use { it.code }
+    return http.newCall(request).execute().use { it.code to it.body.string() }
   }
 
   companion object {

@@ -6,7 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.saquone.notificationlistener.container
 import com.saquone.notificationlistener.data.Endpoint
 import com.saquone.notificationlistener.data.Event
-import com.saquone.notificationlistener.data.Gateway
+import com.saquone.notificationlistener.data.GatewayEntity
 import com.saquone.notificationlistener.util.DeviceHealthChecks
 import com.saquone.notificationlistener.util.ListenerProbe
 import com.saquone.notificationlistener.util.OemGuidance
@@ -26,6 +26,8 @@ data class GatewayApp(
   val gatewayLabel: String,
   val installed: Boolean,
   val watched: Boolean,
+  /** Pola sudah dicocokkan dengan teks notifikasi asli, bukan tebakan. */
+  val verified: Boolean,
 )
 
 data class UiState(
@@ -159,7 +161,7 @@ class ListenerViewModel(app: Application) : AndroidViewModel(app) {
    */
   private suspend fun refreshApps(watched: Set<String>) {
     val pm = getApplication<Application>().packageManager
-    val gateways: List<Gateway> = container.catalog.current()
+    val gateways: List<GatewayEntity> = container.catalog.current()
     val apps =
       withContext(Dispatchers.IO) {
         gateways
@@ -172,6 +174,7 @@ class ListenerViewModel(app: Application) : AndroidViewModel(app) {
               gatewayLabel = g.label,
               installed = label != null,
               watched = pkg in watched,
+              verified = g.verified,
             )
           }
           .sortedWith(
