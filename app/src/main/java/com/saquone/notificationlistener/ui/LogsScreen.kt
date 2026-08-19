@@ -42,10 +42,33 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.remember
 import kotlinx.coroutines.withContext
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LogsScreen(state: UiState, viewModel: ListenerViewModel, bottomBar: @Composable () -> Unit) {
+  val listState = rememberLazyListState()
+
+  val shouldLoadMore = remember {
+    derivedStateOf {
+      val totalItems = listState.layoutInfo.totalItemsCount
+      val lastVisibleItem = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+      totalItems > 0 && lastVisibleItem >= totalItems - 3
+    }
+  }
+
+  LaunchedEffect(shouldLoadMore.value) {
+    if (shouldLoadMore.value && state.hasMoreEvents) {
+      viewModel.loadMoreEvents()
+    }
+  }
+
   TabScaffold(
     title = "Log",
     message = state.message,
@@ -57,18 +80,28 @@ fun LogsScreen(state: UiState, viewModel: ListenerViewModel, bottomBar: @Composa
       }
     },
   ) { padding ->
-    if (state.events.isEmpty()) {
-      Box(Modifier.fillMaxSize().padding(padding).padding(32.dp), contentAlignment = Alignment.Center) {
-        Text(
-          "Belum ada notifikasi yang tertangkap.",
-          style = MaterialTheme.typography.bodyMedium,
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+    PullToRefreshBox(
+      isRefreshing = state.isRefreshing,
+      onRefresh = { viewModel.refreshLogs() },
+      modifier = Modifier.fillMaxSize().padding(padding),
+    ) {
+      if (state.events.isEmpty()) {
+        Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
+          Text(
+            "Belum ada notifikasi yang tertangkap.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+        }
+      } else {
+        LazyColumn(
+          state = listState,
+          modifier = Modifier.fillMaxSize(),
+          contentPadding = PaddingValues(bottom = 16.dp),
+        ) {
+          items(state.events, key = { it.id }) { EventRow(it) }
+        }
       }
-      return@TabScaffold
-    }
-    LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(bottom = 16.dp)) {
-      items(state.events, key = { it.id }) { EventRow(it) }
     }
   }
 }

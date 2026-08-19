@@ -81,9 +81,13 @@ interface EventDao {
 
   @Query("SELECT * FROM event ORDER BY postedAt DESC LIMIT 100") fun recent(): Flow<List<Event>>
 
+  @Query("SELECT * FROM event ORDER BY postedAt DESC LIMIT :limit") fun recentPaged(limit: Int): Flow<List<Event>>
+
   @Query("SELECT count(*) FROM event WHERE status IN ('pending','failed')") fun pendingCount(): Flow<Int>
 
   @Query("DELETE FROM event WHERE status='sent' AND postedAt < :before") suspend fun purgeSent(before: Long)
+
+  @Query("DELETE FROM event WHERE pkg NOT IN (:activePackages)") suspend fun purgeUnmatchedPackages(activePackages: List<String>)
 
   @Query("DELETE FROM event") suspend fun clear()
 }

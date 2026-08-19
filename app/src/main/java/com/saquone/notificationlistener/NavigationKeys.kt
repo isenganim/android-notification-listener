@@ -11,3 +11,5 @@ import kotlinx.serialization.Serializable
 @Serializable data object Logs : NavKey
 
 @Serializable data object Setup : NavKey
+
+@Serializable data class OemGuide(val url: String) : NavKey

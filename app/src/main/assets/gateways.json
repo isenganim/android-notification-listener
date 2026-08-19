@@ -2,7 +2,7 @@
   {
     "key": "dana",
     "label": "DANA Bisnis",
-    "packages": ["id.dana.bisnis", "id.dana"],
+    "packages": ["id.dana"],
     "verified": true,
     "patterns": ["(?i)Rp\\s?([0-9.,]+)\\s*diterima"]
   },

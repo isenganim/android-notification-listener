@@ -42,6 +42,14 @@ class Settings(private val context: Context) {
     }
   }
 
+  /** Hapus paket yang sudah tidak ada di katalog yang aktif. */
+  suspend fun pruneWatched(validPackages: Set<String>) {
+    context.dataStore.edit {
+      val current = it[WATCHED] ?: emptySet()
+      it[WATCHED] = current.intersect(validPackages)
+    }
+  }
+
   /** Katalog gateway hasil sinkron terakhir, apa adanya. Kosong = belum pernah sinkron. */
   suspend fun catalogJsonNow(): String = context.dataStore.data.first()[CATALOG].orEmpty()
 

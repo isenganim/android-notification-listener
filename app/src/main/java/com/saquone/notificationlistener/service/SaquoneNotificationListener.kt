@@ -54,8 +54,9 @@ class SaquoneNotificationListener : NotificationListenerService() {
   }
 
   private suspend fun ingest(sbn: StatusBarNotification) {
+    val activeGateways = container.catalog.current()
+    val gateway = activeGateways.firstOrNull { sbn.packageName in it.packages } ?: return
     if (sbn.packageName !in container.settings.watchedNow()) return
-    val gateway = container.catalog.current().firstOrNull { sbn.packageName in it.packages }
     val extras = sbn.notification.extras
     val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty().trim()
     val text =
@@ -65,7 +66,7 @@ class SaquoneNotificationListener : NotificationListenerService() {
     if (title.isBlank() && text.isBlank()) return
 
     // Nominal dibaca lokal hanya untuk ditampilkan di log; server tetap menghitung ulang sendiri.
-    val amount = gateway?.let { parseAmount(it.patterns, "$title $text") }
+    val amount = parseAmount(gateway.patterns, "$title $text")
     container.outbox.enqueue(sbn.packageName, title, text, sbn.postTime, amount)
     WorkScheduler.flushNow(applicationContext)
   }

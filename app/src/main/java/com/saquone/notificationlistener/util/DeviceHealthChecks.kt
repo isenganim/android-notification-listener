@@ -23,7 +23,7 @@ object DeviceHealthChecks {
   /** ROM OEM kadang menghapus activity pengaturan yang dituju — jangan jatuhkan layar karenanya. */
   fun safeStartActivity(context: Context, intent: Intent) {
     try {
-      context.startActivity(intent)
+      context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     } catch (e: ActivityNotFoundException) {
       Log.w(TAG, "gagal membuka ${intent.action}", e)
     }
@@ -40,9 +40,6 @@ object DeviceHealthChecks {
 
   fun openAutostartSettings(context: Context, tip: OemGuidance.OemTip) =
     openFirstResolvable(context, tip.autostartComponents)
-
-  fun openDontKillMyAppGuide(context: Context, tip: OemGuidance.OemTip) =
-    safeStartActivity(context, Intent(Intent.ACTION_VIEW, Uri.parse(tip.dontKillMyAppUrl)))
 
   /**
    * Buka activity OEM pertama yang benar-benar ada; semua gagal → detail aplikasi, yang selalu ada,

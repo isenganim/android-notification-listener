@@ -22,8 +22,16 @@ import androidx.navigation3.ui.NavDisplay
 import com.saquone.notificationlistener.ui.AppsScreen
 import com.saquone.notificationlistener.ui.ListenerViewModel
 import com.saquone.notificationlistener.ui.LogsScreen
+import com.saquone.notificationlistener.ui.OemGuideScreen
 import com.saquone.notificationlistener.ui.SetupScreen
 import com.saquone.notificationlistener.ui.StatusScreen
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 
 private data class Tab(val key: NavKey, val label: String, val icon: ImageVector)
 
@@ -76,11 +84,38 @@ fun MainNavigation() {
   NavDisplay(
     backStack = backStack,
     onBack = { backStack.removeLastOrNull() },
+    transitionSpec = {
+      // Material Design 3 Shared Axis (X) Forward Transition
+      (slideInHorizontally(animationSpec = tween(350, easing = FastOutSlowInEasing), initialOffsetX = { (it * 0.15f).toInt() }) +
+        fadeIn(animationSpec = tween(300, easing = FastOutSlowInEasing))) togetherWith
+        (slideOutHorizontally(animationSpec = tween(350, easing = FastOutSlowInEasing), targetOffsetX = { -(it * 0.15f).toInt() }) +
+          fadeOut(animationSpec = tween(200, easing = FastOutSlowInEasing)))
+    },
+    popTransitionSpec = {
+      // Material Design 3 Shared Axis (X) Backward Transition
+      (slideInHorizontally(animationSpec = tween(350, easing = FastOutSlowInEasing), initialOffsetX = { -(it * 0.15f).toInt() }) +
+        fadeIn(animationSpec = tween(300, easing = FastOutSlowInEasing))) togetherWith
+        (slideOutHorizontally(animationSpec = tween(350, easing = FastOutSlowInEasing), targetOffsetX = { (it * 0.15f).toInt() }) +
+          fadeOut(animationSpec = tween(200, easing = FastOutSlowInEasing)))
+    },
+    predictivePopTransitionSpec = {
+      (slideInHorizontally(animationSpec = tween(350, easing = FastOutSlowInEasing), initialOffsetX = { -(it * 0.15f).toInt() }) +
+        fadeIn(animationSpec = tween(300, easing = FastOutSlowInEasing))) togetherWith
+        (slideOutHorizontally(animationSpec = tween(350, easing = FastOutSlowInEasing), targetOffsetX = { (it * 0.15f).toInt() }) +
+          fadeOut(animationSpec = tween(200, easing = FastOutSlowInEasing)))
+    },
     entryProvider =
       entryProvider {
         entry<Status> {
-          StatusScreen(state, viewModel, bottomBar, onOpenSetup = { backStack.add(Setup) })
+          StatusScreen(
+            state,
+            viewModel,
+            bottomBar,
+            onOpenSetup = { backStack.add(Setup) },
+            onOpenOemGuide = { url -> backStack.add(OemGuide(url)) },
+          )
         }
+        entry<OemGuide> { key -> OemGuideScreen(key.url, onBack = { backStack.removeLastOrNull() }) }
         entry<Apps> { AppsScreen(state, viewModel, bottomBar) }
         entry<Logs> { LogsScreen(state, viewModel, bottomBar) }
         entry<Setup> {

@@ -22,7 +22,12 @@ data class GatewayDto(
  * `GET <origin>/gateways` di qris-server, disimpan ke Room sebagai **cache** supaya tetap jalan
  * offline. Salinan bawaan di assets dipakai sebelum pernah tersambung.
  */
-class Catalog(private val context: Context, private val settings: Settings, private val dao: GatewayDao) {
+class Catalog(
+  private val context: Context,
+  private val settings: Settings,
+  private val dao: GatewayDao,
+  private val eventDao: EventDao,
+) {
 
   private val http = OkHttpClient()
   private val json = Json { ignoreUnknownKeys = true }
@@ -42,6 +47,9 @@ class Catalog(private val context: Context, private val settings: Settings, priv
     val now = System.currentTimeMillis()
     dao.upsert(list.map { GatewayEntity(it.key, it.label, it.packages, it.patterns, it.verified, now) })
     dao.deleteMissing(list.map { it.key })
+    val validPackages = list.flatMap { it.packages }
+    settings.pruneWatched(validPackages.toSet())
+    eventDao.purgeUnmatchedPackages(validPackages)
   }
 
   /**

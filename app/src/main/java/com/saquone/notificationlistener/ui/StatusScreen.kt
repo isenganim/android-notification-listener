@@ -34,12 +34,16 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.saquone.notificationlistener.util.ListenerProbe
 
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.CloudDownload
+
 @Composable
 fun StatusScreen(
   state: UiState,
   viewModel: ListenerViewModel,
   bottomBar: @Composable () -> Unit,
   onOpenSetup: () -> Unit,
+  onOpenOemGuide: (String) -> Unit,
 ) {
   TabScaffold(
     title = "Status",
@@ -54,14 +58,15 @@ fun StatusScreen(
       Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
       verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-      HealthCard(state, viewModel)
+      HealthCard(state, viewModel, onOpenOemGuide)
       EndpointCard(state, onOpenSetup, viewModel)
+      ParserCard(state, viewModel)
     }
   }
 }
 
 @Composable
-private fun HealthCard(state: UiState, viewModel: ListenerViewModel) {
+private fun HealthCard(state: UiState, viewModel: ListenerViewModel, onOpenOemGuide: (String) -> Unit) {
   val healthy = state.listenerEnabled && state.probe != ListenerProbe.Result.NOT_DELIVERED
   val tip = viewModel.oemTip
   Card(
@@ -109,7 +114,7 @@ private fun HealthCard(state: UiState, viewModel: ListenerViewModel) {
             Text(tip.probeNotDeliveredMessage, style = MaterialTheme.typography.bodyMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
               FilledTonalButton(onClick = viewModel::openAutostartSettings) { Text("Buka Autostart") }
-              TextButton(onClick = viewModel::openOemGuide) { Text("Panduan ${tip.vendorLabel}") }
+              TextButton(onClick = { onOpenOemGuide(tip.dontKillMyAppUrl) }) { Text("Panduan ${tip.vendorLabel}") }
             }
           }
           ListenerProbe.Result.BLOCKED_BY_OS -> Text(tip.probeBlockedMessage, style = MaterialTheme.typography.bodyMedium)
@@ -159,6 +164,39 @@ private fun EndpointCard(state: UiState, onOpenSetup: () -> Unit, viewModel: Lis
             Text("Kirim ${state.pendingCount} tertunda", modifier = Modifier.padding(start = 4.dp))
           }
         }
+      }
+    }
+  }
+}
+
+@Composable
+private fun ParserCard(state: UiState, viewModel: ListenerViewModel) {
+  Card(Modifier.fillMaxWidth()) {
+    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+      Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Default.Build, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+        Text(
+          "Parser Notifikasi (Room DB)",
+          style = MaterialTheme.typography.titleMedium,
+          modifier = Modifier.padding(start = 8.dp),
+        )
+      }
+      Text(
+        "Aturan regex parser tersimpan di database Room HP. Klik tombol di bawah untuk mengambil aturan parser terbaru dari qris-server dan menyimpannya ke Room.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
+      FilledTonalButton(
+        onClick = viewModel::updateParserRules,
+        enabled = !state.catalogSyncing,
+        modifier = Modifier.padding(top = 4.dp),
+      ) {
+        if (state.catalogSyncing) {
+          CircularProgressIndicator(Modifier.size(16.dp).padding(end = 4.dp))
+        } else {
+          Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(16.dp))
+        }
+        Text("Update Parser & Simpan ke Room", modifier = Modifier.padding(start = 6.dp))
       }
     }
   }

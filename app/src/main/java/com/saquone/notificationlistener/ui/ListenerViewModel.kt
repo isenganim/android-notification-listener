@@ -15,6 +15,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -43,6 +44,9 @@ data class UiState(
   val catalogSyncing: Boolean = false,
   val events: List<Event> = emptyList(),
   val pendingCount: Int = 0,
+  val eventLimit: Int = 20,
+  val hasMoreEvents: Boolean = true,
+  val isRefreshing: Boolean = false,
   val message: String? = null,
 ) {
   val watchedCount: Int
@@ -58,17 +62,67 @@ class ListenerViewModel(app: Application) : AndroidViewModel(app) {
   private val _state = MutableStateFlow(UiState())
   val state: StateFlow<UiState> = _state.asStateFlow()
 
+  private val _eventLimit = MutableStateFlow(20)
+
   val oemTip: OemGuidance.OemTip = OemGuidance.forManufacturer()
 
   init {
     viewModelScope.launch {
       container.settings.endpoint.collect { e -> _state.update { it.copy(endpoint = e, endpointLoaded = true) } }
     }
-    viewModelScope.launch { container.events.recent().collect { l -> _state.update { it.copy(events = l) } } }
+    viewModelScope.launch {
+      @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+      _eventLimit.flatMapLatest { limit -> container.events.recentPaged(limit) }
+        .collect { l ->
+          _state.update { it.copy(events = l, hasMoreEvents = l.size >= _eventLimit.value) }
+        }
+    }
     viewModelScope.launch { container.events.pendingCount().collect { c -> _state.update { it.copy(pendingCount = c) } } }
     viewModelScope.launch { container.settings.watched.collect { refreshApps(it) } }
     viewModelScope.launch { syncCatalog(silent = true) }
     WorkScheduler.schedulePeriodic(app)
+  }
+
+  fun loadMoreEvents() {
+    if (_state.value.hasMoreEvents) {
+      val nextLimit = _eventLimit.value + 20
+      _eventLimit.value = nextLimit
+      _state.update { it.copy(eventLimit = nextLimit) }
+    }
+  }
+
+  fun refreshLogs() {
+    viewModelScope.launch {
+      _state.update { it.copy(isRefreshing = true) }
+      withContext(Dispatchers.IO) {
+        container.outbox.flush()
+        container.catalog.sync()
+      }
+      _state.update { it.copy(isRefreshing = false, message = "Data & verifikasi diperbarui dari qris-server.") }
+    }
+  }
+
+  fun refreshAppsPage() {
+    viewModelScope.launch {
+      _state.update { it.copy(isRefreshing = true) }
+      syncCatalog(silent = false)
+      _state.update { it.copy(isRefreshing = false) }
+    }
+  }
+
+  /** Ambil aturan parser terbaru dari qris-server dan simpan permanen ke Room DB. */
+  fun updateParserRules() {
+    viewModelScope.launch {
+      _state.update { it.copy(catalogSyncing = true) }
+      val result = withContext(Dispatchers.IO) { container.catalog.sync() }
+      _state.update { it.copy(catalogSyncing = false) }
+      refreshApps(container.settings.watchedNow())
+      val msg = result.fold(
+        onSuccess = { n -> "Aturan parser berhasil diperbarui & disimpan ke Room DB ($n gateway)." },
+        onFailure = { e -> "Gagal update parser: ${e.message}. Tetap menggunakan aturan tersimpan di Room." }
+      )
+      _state.update { it.copy(message = msg) }
+    }
   }
 
   fun refreshPermissions() {
@@ -153,7 +207,6 @@ class ListenerViewModel(app: Application) : AndroidViewModel(app) {
 
   fun openAutostartSettings() = DeviceHealthChecks.openAutostartSettings(getApplication(), oemTip)
 
-  fun openOemGuide() = DeviceHealthChecks.openDontKillMyAppGuide(getApplication(), oemTip)
 
   /**
    * Yang ditampilkan HANYA aplikasi yang ada di katalog — bukan seluruh isi HP. Daftarnya datang

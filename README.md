@@ -1,196 +1,136 @@
 # Saquone Notification Listener
 
-Listener notifikasi Android untuk **QRIS**: baca notifikasi aplikasi merchant, teruskan ke
-server milikmu, dan biarkan nominalnya diverifikasi otomatis terhadap tagihan yang menunggu.
+[![License: GPL v3](https://img.shields.io/badge/License-GPL_v3-blue.svg)](LICENSE)
+[![Self-Host Ready](https://img.shields.io/badge/Self--Host-Ready-orange.svg)](#)
+[![Android Min SDK](https://img.shields.io/badge/Min_SDK-24-green.svg)](https://developer.android.com)
+[![Target SDK](https://img.shields.io/badge/Target_SDK-36-brightgreen.svg)](https://developer.android.com)
+[![Jetpack Compose](https://img.shields.io/badge/UI-Jetpack_Compose_M3-purple.svg)](https://developer.android.com/jetpack/compose)
 
-Pilih aplikasi merchant mana yang boleh dibaca, isi satu URL, selesai. Tiap notifikasi yang
-masuk dikirim sebagai JSON POST — ditandatangani HMAC-SHA256 kalau kamu mengisi secret.
+Listener notifikasi Android **Self-Hosted** open-source untuk **QRIS**: membaca notifikasi pembayaran dari aplikasi merchant (seperti **DANA Bisnis**), meneruskannya ke server milikmu sendiri (*self-hosted*) secara aman via webhook, dan memverifikasi nominal transaksi secara otomatis.
 
-**Tanpa akun. Tanpa login. Tanpa server perantara.** Datanya pergi ke tempat yang kamu
-tentukan, dan tidak ke mana-mana lagi.
+Pilih aplikasi pembayaran yang ingin dibaca, atur **URL Endpoint**, selesai. Setiap notifikasi diteruskan sebagai HTTP JSON POST bertanda tangan **HMAC-SHA256**.
 
-## Cara pakai
+🔒 **100% Self-Hosted. Tanpa akun. Tanpa login. Tanpa server perantara pihak ketiga. 100% Privasi Terjamin.**
 
-1. Pasang APK, buka, isi **URL endpoint** (+ secret kalau mau request ditandatangani)
-2. Beri izin **akses notifikasi** saat diminta
-3. Buka tab **Aplikasi**, nyalakan switch untuk aplikasi pembayaran yang mau dibaca
-4. Tab **Status** → **Tes sekarang** untuk membuktikan listener benar-benar hidup
+---
 
-Tiga tab: **Status** (kesehatan + endpoint), **Aplikasi** (pilih yang dibaca), **Log**.
+## 🌟 Fitur Utama
 
-Tab **Log** menampilkan, per notifikasi: ikon aplikasi sumbernya, apakah **nominal terbaca**,
-dan apakah pembayarannya **terverifikasi** — yaitu nominalnya cocok persis dengan tagihan yang
-menunggu di server dan tagihan itu ditandai lunas. Dua hal yang berbeda dan sering tertukar.
+- **🎨 Material Design 3 & Material You (Dynamic Colors):** Tampilan visual modern yang menyesuaikan warna wallpaper HP secara otomatis di Android 12+ (HyperOS, OneUI, Pixel UI).
+- **🎬 Material Motion Navigation:** Transisi perpindahan layar yang mulus dengan standar *Material 3 Shared Axis (X)* dan dukungan *Predictive Back Gesture*.
+- **🔄 Pull-To-Refresh (Usap LAYAR ke Bawah):**
+  - **Di Halaman Aplikasi:** Mengusap ke bawah langsung mengambil katalog gateway terbaru dari `qris-server` (`GET /gateways`).
+  - **Di Halaman Log:** Mengusap ke bawah memicu *Flush & Sync Penuh* untuk mengirimkan antrean notifikasi pending dan memperbarui status verifikasi dari server secara *real-time*.
+- **📜 Infinite Scroll dengan Paginasi:** Riwayat notifikasi di halaman Log dimuat secara bertahap (*batch 20 item per load*) sehingga tetap cepat dan efisien.
+- **🛠️ Tombol "Update Parser & Simpan ke Room":** Mengunduh aturan regex parser dari `qris-server` dan menyimpannya secara permanen ke database lokal **Room DB** HP untuk dukungan offline.
+- **🛡️ Strictly Active Catalog & Auto-Pruning:** Pembaca notifikasi memfilter secara ketat aplikasi yang aktif di katalog server. Aplikasi di luar katalog (seperti notifikasi promo atau driver) diabaikan secara otomatis.
+- **⚡ Reliable Outbox Pattern (Anti Loss):** Notifikasi selalu disimpan ke Room DB lokal terlebih dahulu sebelum dikirim. Jika sinyal mati atau aplikasi dimatikan OS, notifikasi tersimpan aman dan dikirim otomatis saat online kembali.
+- **🩺 Self-Diagnostic Tool ("Tes Sekarang"):** Fitur `ListenerProbe` untuk membuktikan apakah listener aktif dan ter-bind oleh sistem Android, lengkap dengan bantuan pintasan *Autostart*, *Optimasi Baterai*, dan panduan vendor HP (*Don'tKillMyApp*).
 
-### Aplikasi mana yang muncul
+---
 
-Hanya aplikasi pembayaran yang didukung — DANA Bisnis, GoPay Merchant, Grab Merchant,
-BRI Merchant, ShopeePay Merchant, OVO, dan lainnya. Bukan seluruh isi HP.
+## 🚀 Cara Penggunaan
 
-Daftarnya **tidak ditulis di aplikasi ini**. Sumbernya `GET /gateways` di
-[qris-server](https://github.com/Saquone/qris), diambil saat online dan disimpan ke Room
-sebagai **cache** supaya tetap jalan offline — sumber kebenarannya tetap server.
+1. **Pasang & Buka APK** di HP Android.
+2. Isi **URL Endpoint** (contoh: `http://192.168.1.10:8080/notification`) dan *Secret Key* HMAC (opsional).
+3. Berikan izin **Akses Notifikasi** saat diminta.
+4. Di tab **Aplikasi**, aktifkan switch untuk aplikasi pembayaran yang ingin dibaca (contoh: **DANA Bisnis**).
+5. Di tab **Status**, tekan **"Tes sekarang"** untuk memverifikasi layanan aktif.
 
-Gateway yang polanya belum dicocokkan dengan teks notifikasi asli ditandai
-"pola belum diverifikasi", bukan disamarkan seolah sudah pasti jalan. Menambah dukungan gateway baru cukup di server:
+---
+
+## ⚙️ Aplikasi Gateway & Katalog
+
+Aplikasi ini bersifat **Config-Driven**: daftar aplikasi pembayaran yang didukung **tidak di-hardcode di APK**, melainkan datang dari server (`GET /gateways`) dan di-cache ke **Room DB**.
+
+Menambah dukungan bank/e-wallet baru cukup dilakukan di sisi server tanpa perlu rilis ulang APK:
 
 ```bash
-qris-server -catalog gateways-saya.json
+qris-server -catalog gateways-custom.json
 ```
 
-lalu tekan ikon refresh di tab Aplikasi — **tanpa membangun ulang APK**. Salinan bawaan
-ada di `app/src/main/assets/gateways.json` supaya aplikasi tetap berguna sebelum pernah
-tersambung.
+Lalu tekan tombol **"Update Parser & Simpan ke Room"** atau usap layar ke bawah (*Pull-To-Refresh*) di tab Aplikasi.
 
-## Yang dikirim
+---
+
+## 📩 Format HTTP Webhook Payload
+
+Setiap notifikasi yang tertangkap dikirim via HTTP POST:
 
 ```http
-POST <URL kamu>
+POST /notification HTTP/1.1
+Host: server-kamu.com
 Content-Type: application/json
-X-Signature: <HMAC-SHA256 hex dari body, kalau secret diisi>
+X-Signature: c3ab8ff13720e8ad9047dd39466b3c8974e592c2fa383d4a3960714caef0c4f2
 
 {
   "package_name": "id.dana",
   "title": "Pembayaran Masuk",
-  "text": "Rp50.137 diterima DANA Bisnis.",
-  "posted_at": 1765432100000
+  "text": "Rp1.426 diterima DANA Bisnis.",
+  "posted_at": 1787117948509
 }
 ```
 
-`posted_at` = epoch milidetik (`StatusBarNotification.postTime`), bukan waktu kirim.
+* **Header `X-Signature`:** Hasil HMAC-SHA256 hex digest dari raw JSON body menggunakan *Secret Key* yang kamu atur.
+* **`posted_at`:** Epoch timestamp milidetik (`StatusBarNotification.postTime`) saat notifikasi muncul di HP.
+* **Respon Server:** Balas dengan HTTP Status Code `2xx` (misal `200 OK`) untuk mengonfirmasi sukses. Jika server membalas selain `2xx` atau koneksi terputus, notifikasi akan tersimpan di antrean Room dan dicoba ulang secara otomatis.
 
-Balas **2xx** untuk menandai terkirim. Kode lain atau gagal koneksi membuat notifikasi
-tetap di antrean dan dicoba lagi — **tidak ada yang hilang saat offline**. Notifikasi
-selalu disimpan ke Room dulu, baru dikirim; kalau prosesnya dimatikan sistem di tengah
-jalan, antreannya selamat.
+---
 
-Teks mentah dikirim apa adanya — **server yang berwenang** memutuskan artinya. Aplikasi juga
-membaca nominalnya sendiri memakai pola dari katalog, tapi itu hanya untuk ditampilkan di tab
-Log; hasilnya tidak ikut dikirim.
+## 💻 Server Pasangan Resmi
 
-## Server pasangannya
-
-[github.com/saquone/qris](https://github.com/Saquone/qris) (MIT) punya server siap pakai —
-**tanpa satu baris kode pun yang perlu kamu tulis**:
+Aplikasi ini merupakan pasangan resmi dari modul library open-source **[github.com/saquone/qris](https://github.com/Saquone/qris)** (Go, MIT License):
 
 ```bash
+# 1. Jalankan qris-server
 go install github.com/saquone/qris/cmd/qris-server@latest
-qris-server -secret whsec_rahasia
+qris-server -secret secret_rahasia_kamu
+
+# 2. Buat tagihan QRIS dinamis (misal Rp1.000 + kode unik 426 = Rp1.426)
+curl -X POST http://localhost:8080/charges -d '{"amount":1000}'
+# → {"id":3,"amount":1426,"payload":"0002010102122665...","status":"pending"}
+
+# 3. Setelah pembeli membayar Rp1.426 via QRIS, listener akan meneruskan notifikasi
+#    dan server otomatis mengubah status tagihan menjadi lunas ("paid")!
+curl http://localhost:8080/charges/3
+# → {"id":3,"status":"paid","paid_at":1787117996120}
 ```
 
-Isi URL `http://<ip-servermu>:8080/notification` + secret yang sama di aplikasi. Alur penuhnya:
+---
+
+## 🛠️ Kompilasi & Build
 
 ```bash
-# 1. unggah QRIS statis merchant (gambarnya disimpan di folder -qris-dir)
-curl -X POST localhost:8080/qris --data-binary @qris-toko.png
+# Build APK Debug
+./gradlew assembleDebug
 
-# 2. buat tagihan — kode unik ditambahkan supaya nominalnya tidak pernah kembar
-curl -X POST localhost:8080/charges -d '{"amount":50000}'
-# → {"id":1,"amount":50684,"payload":"0002010102122665...","status":"pending"}
+# Build APK Release (membutuhkan secrets/keystore.properties jika signed)
+./gradlew assembleProdRelease
 
-# 3. pembeli bayar Rp50.684 → notifikasi masuk → aplikasi ini meneruskannya
-#    → server mencocokkan dan menandai tagihan lunas
-curl localhost:8080/charges/1
-# → {"status":"paid","paid_at":...}
+# Jalankan Unit Tests
+./gradlew test
 ```
 
-Jawaban tiap notifikasi memuat status verifikasinya, dan itulah yang ditampilkan di tab Log:
+* **Persyaratan Build:** JDK 17, Android SDK (`minSdk 24`, `targetSdk 36`).
+* **Teknologi:** Kotlin, Jetpack Compose Material 3, Navigation 3 (`androidx.navigation3`), Room DB, WorkManager, OkHttp3, Kotlin Serialization.
 
-```json
-{"amount":50684,"matched":true,"verified":true,"charge_id":1}
-```
+---
 
-## Menerima di kodemu sendiri
+## 🔑 Hak Akses / Izin (Permissions)
 
-Kalau mau logika sendiri, verifikasi tanda tangan dan ekstraksi nominal tersedia sebagai
-library:
-
-```go
-import (
-    "github.com/saquone/qris/notif"
-    "github.com/saquone/qris/webhook"
-)
-
-parser, _ := notif.New([]string{`Rp\s?([0-9.,]+)\s*diterima`})
-
-http.HandleFunc("/events", func(w http.ResponseWriter, r *http.Request) {
-    body, _ := io.ReadAll(r.Body)
-    if !webhook.Verify(secret, r.Header.Get("X-Signature"), body) {
-        http.Error(w, "tanda tangan tidak cocok", http.StatusUnauthorized)
-        return
-    }
-
-    var e struct {
-        PackageName string `json:"package_name"`
-        Title       string `json:"title"`
-        Text        string `json:"text"`
-        PostedAt    int64  `json:"posted_at"`
-    }
-    json.Unmarshal(body, &e)
-
-    amount, err := parser.ParseAmount(e.Title + " " + e.Text)
-    if err != nil {
-        w.WriteHeader(http.StatusOK) // bukan notifikasi pembayaran, jangan minta kirim ulang
-        return
-    }
-    // ... cocokkan `amount` dengan transaksimu
-})
-```
-
-Server tidak harus Go — endpoint apa pun yang bisa menerima POST JSON sudah cukup.
-
-## Kalau notifikasi tidak sampai
-
-Izin diberikan ≠ layanan dijalankan. Di MIUI/HyperOS dengan "Mulai otomatis" mati, sistem
-menolak mem-bind listener padahal izinnya ada — aplikasi tampak sehat sementara tidak ada
-satu pun notifikasi terbaca.
-
-Karena itu ada tombol **Tes sekarang** di tab Status: aplikasi mem-post notifikasi ke dirinya
-sendiri lalu memeriksa apakah listener-nya melihatnya. Kalau tidak sampai, muncul langkah
-spesifik untuk merek HP-mu plus pintasan ke layar Autostart-nya.
-
-Diuji di Xiaomi (HyperOS): izin sudah diberikan dan aplikasi tampak aktif, tapi sistem menolak
-mem-bind listener-nya — persis kasus yang tombol ini cari.
-
-## Build
-
-```bash
-./gradlew assembleDebug     # app/build/outputs/apk/debug/
-./gradlew assembleRelease   # tanpa keystore → APK unsigned
-```
-
-Butuh JDK 17 dan Android SDK (`local.properties` → `sdk.dir`). min SDK 24, target SDK 36.
-
-Di-scaffold dengan `android create empty-activity`
-([Android CLI](https://developer.android.com/tools)). Kotlin, Jetpack Compose Material 3
-dengan warna dinamis di Android 12+, Navigation 3, Room, WorkManager, OkHttp. Tanpa
-framework DI — tiga objek berumur panjang di satu container manual.
-
-## Izin
-
-| Izin | Kenapa |
+| Izin Android | Kegunaan & Alasan |
 |---|---|
-| `BIND_NOTIFICATION_LISTENER_SERVICE` | membaca notifikasi — inti aplikasi |
-| `INTERNET` | mengirim ke endpoint-mu |
-| `FOREGROUND_SERVICE`, `..._DATA_SYNC` | pengiriman antrean bertahan saat layar mati |
-| `POST_NOTIFICATIONS` | notifikasi tes milik aplikasi sendiri |
-| `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` | mencegah OEM mematikan listener |
+| `BIND_NOTIFICATION_LISTENER_SERVICE` | Membaca notifikasi dari aplikasi merchant |
+| `INTERNET` | Mengirim data notifikasi ke endpoint server kamu |
+| `FOREGROUND_SERVICE` & `DATA_SYNC` | Memastikan pengiriman outbox bertahan saat layar mati |
+| `POST_NOTIFICATIONS` | Mengirim notifikasi tes mandiri (`ListenerProbe`) |
+| `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` | Mencegah sistem mematikan listener di latar belakang |
 
-WorkManager menambahkan `WAKE_LOCK`, `ACCESS_NETWORK_STATE`, dan `RECEIVE_BOOT_COMPLETED`
-lewat manifest merge — bukan dideklarasikan aplikasi ini, tapi tetap muncul di APK, jadi
-disebut di sini supaya daftarnya jujur. Verifikasi sendiri:
+* `QUERY_ALL_PACKAGES` **tidak digunakan**. Sebagai gantinya digunakan query intent `LAUNCHER` yang aman dan sesuai kebijakan Google Play Store / Android 11+.
 
-```bash
-aapt2 dump permissions app-debug.apk
-```
+---
 
-Tidak ada `QUERY_ALL_PACKAGES`. Sebagai gantinya `<queries>` dengan filter intent LAUNCHER —
-sejak Android 11 aplikasi tidak bisa melihat paket lain tanpa itu, dan tanpanya semua gateway
-tampak "belum terpasang". Yang terlihat hanya aplikasi berikon peluncur, bukan seluruh isi HP.
-Backup dimatikan supaya secret endpoint tidak ikut tersalin ke cloud lalu dipulihkan ke
-perangkat lain.
+## 📄 Lisensi
 
-## Lisensi
-
-[GPL-3.0](LICENSE). Versi modifikasi wajib ikut membuka kode sumbernya — itu yang membuat
-"aplikasi ini cuma meneruskan notifikasi ke alamatmu" bisa dibuktikan, bukan sekadar janji.
+Proyek ini dirilis di bawah lisensi **[GNU General Public License v3.0 (GPL-3.0)](LICENSE)**.
+Setiap modifikasi atau pendistribusian ulang wajib menyertakan kode sumber lengkap.
