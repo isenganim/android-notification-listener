@@ -104,8 +104,12 @@ curl http://localhost:8080/charges/3
 # Build APK Debug
 ./gradlew assembleDebug
 
-# Build APK Release (membutuhkan secrets/keystore.properties jika signed)
-./gradlew assembleProdRelease
+# Build APK Release (unsigned jika tanpa keystore)
+./gradlew assembleRelease
+
+# Build APK Release + signed (konfigurasi keystore lokal)
+# buat app/keystore.properties dari contoh di bawah terlebih dahulu
+./gradlew assembleRelease
 
 # Jalankan Unit Tests
 ./gradlew test
@@ -113,6 +117,43 @@ curl http://localhost:8080/charges/3
 
 * **Persyaratan Build:** JDK 17, Android SDK (`minSdk 24`, `targetSdk 36`).
 * **Teknologi:** Kotlin, Jetpack Compose Material 3, Navigation 3 (`androidx.navigation3`), Room DB, WorkManager, OkHttp3, Kotlin Serialization.
+
+### 📦 Rilis Otomatis via GitHub Actions
+
+Workflow `.github/workflows/release.yml` membangun APK **release + signed**, lalu membuat **GitHub Release** dengan APK terpasang. Cukup push tag versi:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+Versi otomatis dibaca dari tag (`v1.2.3` → `versionName 1.2.3`, `versionCode 10203`).
+
+**Secret yang wajib di-set di repo → Settings → Secrets and variables → Actions:**
+
+| Secret              | Isi                                              |
+|---------------------|--------------------------------------------------|
+| `KEYSTORE_BASE64`   | keystore `.jks` hasil `base64 -w0 keystore.jks`   |
+| `KEYSTORE_PASSWORD` | password keystore                                |
+| `KEY_ALIAS`         | alias kunci (default `saquone`)                  |
+| `KEY_PASSWORD`      | password kunci alias                             |
+
+### 🔑 Signing lokal (opsional, untuk release manual)
+
+Buat keystore sekali:
+```bash
+keytool -genkeypair -v -keystore keystore-release.jks \
+  -alias saquone -keyalg RSA -keysize 2048 -validity 10000
+```
+Lalu buat `app/keystore.properties` (jangan di-commit, sudah di-`.gitignore`):
+```properties
+storeFile=keystore-release.jks
+storePassword=RAHASIA
+keyAlias=saquone
+keyPassword=RAHASIA
+```
+> Tanpa keystore, `assembleRelease` tetap jalan tapi APK **tidak di-sign** (tidak bisa langsung di-install).
+
 
 ---
 
