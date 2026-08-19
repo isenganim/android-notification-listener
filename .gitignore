@@ -13,3 +13,11 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Konfigurasi & kunci penandatanganan (jangan commit!)
+keystore.properties
+keystore.sample.properties
+keystore-release.jks
+*.jks
+*.keystore
+*.p12
